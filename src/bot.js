@@ -95,7 +95,10 @@ function startBot(config) {
         await sendToUser(`🔔 ${event.name} (workspace ${event.workspaceId}) ${label}.`);
       }
       lastKnownStatuses = {};
-      for (const agent of (agents || [])) lastKnownStatuses[agent.name] = agent.agent_status;
+      for (const agent of (agents || [])) {
+        const key = agent.name || agent.pane_id;
+        if (key) lastKnownStatuses[key] = agent.agent_status;
+      }
     } catch (err) {
       log(`error polling for notifications: ${err && err.stack ? err.stack : err}`);
     } finally {

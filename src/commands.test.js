@@ -31,6 +31,17 @@ test('formatStatusMessage lists each agent with name, status, and workspace', ()
   assert.match(message, /w2/);
 });
 
+test('formatStatusMessage handles agents without custom name gracefully', () => {
+  const agents = [
+    { agent: 'claude', pane_id: 'w2:p2', terminal_title_stripped: 'My Task', agent_status: 'idle', workspace_id: 'w2' },
+    { agent: 'claude', pane_id: 'w2:p4', agent_status: 'working', workspace_id: 'w2' },
+  ];
+  const message = formatStatusMessage(agents);
+  assert.match(message, /My Task/);
+  assert.match(message, /claude \[w2:p4\]/);
+  assert.doesNotMatch(message, /undefined/);
+});
+
 test('formatStatusMessage reports a clear message when there are no agents', () => {
   const message = formatStatusMessage([]);
   assert.match(message, /no agents/i);

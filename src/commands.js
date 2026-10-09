@@ -16,10 +16,18 @@ function parseCommand(messageText) {
   return { type: 'text', text: messageText };
 }
 
+function getAgentDisplayName(agent) {
+  if (!agent) return 'unknown';
+  if (agent.name) return agent.name;
+  if (agent.terminal_title_stripped) return `${agent.terminal_title_stripped} (${agent.agent || 'agent'})`;
+  if (agent.agent && agent.pane_id) return `${agent.agent} [${agent.pane_id}]`;
+  return agent.pane_id || 'unnamed-agent';
+}
+
 function formatStatusMessage(agents) {
   if (!Array.isArray(agents) || agents.length === 0) return 'No agents are currently running.';
   const lines = agents.map(
-    (a) => `${a.name}: ${a.agent_status} (workspace ${a.workspace_id})`
+    (a) => `${getAgentDisplayName(a)}: ${a.agent_status} (workspace ${a.workspace_id})`
   );
   return lines.join('\n');
 }
@@ -31,7 +39,7 @@ async function handleStopCommand({ runHerdr, name, agents = [] }) {
   if (name === FIRST_MATE_NAME) {
     return { ok: false, message: 'Cannot stop first-mate. /stop is for crewmates only.' };
   }
-  const match = (agents || []).find((a) => a.name === name);
+  const match = (agents || []).find((a) => a.name === name || a.pane_id === name);
   if (!match) {
     return { ok: false, message: `Agent "${name}" not found. Check /status for current names.` };
   }
@@ -42,4 +50,4 @@ async function handleStopCommand({ runHerdr, name, agents = [] }) {
   return { ok: true, message: `Stopped and removed workspace for "${name}".` };
 }
 
-module.exports = { parseCommand, formatStatusMessage, handleStopCommand };
+module.exports = { parseCommand, formatStatusMessage, handleStopCommand, getAgentDisplayName };

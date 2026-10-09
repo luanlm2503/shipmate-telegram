@@ -17,18 +17,21 @@ function diffAgentStatuses(previous = {}, current = []) {
   }
   const events = [];
   for (const agent of current) {
-    if (!agent || agent.name === FIRST_MATE_NAME) continue;
-    if (!Object.hasOwn(previous, agent.name)) continue;
-    const previousStatus = previous[agent.name];
+    if (!agent) continue;
+    const key = agent.name || agent.pane_id;
+    if (!key || agent.name === FIRST_MATE_NAME) continue;
+    if (!Object.hasOwn(previous, key)) continue;
+    const previousStatus = previous[key];
     if (previousStatus === agent.agent_status) continue;
 
+    const displayName = agent.name || agent.terminal_title_stripped || agent.pane_id;
     if (agent.agent_status === 'blocked') {
-      events.push({ name: agent.name, workspaceId: agent.workspace_id, kind: 'blocked' });
+      events.push({ name: displayName, workspaceId: agent.workspace_id, kind: 'blocked' });
     } else if (
       (previousStatus === 'working' || previousStatus === 'blocked') &&
       FINISHED_STATUSES.has(agent.agent_status)
     ) {
-      events.push({ name: agent.name, workspaceId: agent.workspace_id, kind: 'finished' });
+      events.push({ name: displayName, workspaceId: agent.workspace_id, kind: 'finished' });
     }
   }
   return events;
