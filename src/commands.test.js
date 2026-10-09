@@ -72,3 +72,19 @@ test('handleStopCommand calls herdr worktree remove for a found agent and report
   assert.equal(result.ok, true);
   assert.deepEqual(calls, [['worktree', 'remove', '--workspace', 'w1', '--force']]);
 });
+
+test('handleStopCommand refuses to stop first-mate', async () => {
+  const result = await handleStopCommand({
+    runHerdr: async () => {},
+    name: 'first-mate',
+    agents: [{ name: 'first-mate', workspace_id: 'w0' }],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /cannot stop first-mate/i);
+});
+
+test('parseCommand handles case-insensitivity and bot handle mentions', () => {
+  assert.deepEqual(parseCommand('/Status'), { type: 'status' });
+  assert.deepEqual(parseCommand('/status@my_bot'), { type: 'status' });
+  assert.deepEqual(parseCommand('/STOP@my_bot crewA'), { type: 'stop', name: 'crewA' });
+});

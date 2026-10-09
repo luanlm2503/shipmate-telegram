@@ -1,9 +1,17 @@
+const { FIRST_MATE_NAME } = require('./firstMate');
+
 function parseCommand(messageText) {
   const trimmed = (messageText || '').trim();
-  if (trimmed === '/status') return { type: 'status' };
-  if (trimmed === '/stop' || trimmed.startsWith('/stop ')) {
-    const rest = trimmed.slice('/stop'.length).trim();
-    return { type: 'stop', name: rest.length > 0 ? rest : undefined };
+  const match = trimmed.match(/^\/([a-zA-Z0-9_]+)(?:@\w+)?(?:\s+(.*))?$/s);
+  if (match) {
+    const cmd = match[1].toLowerCase();
+    const rest = (match[2] || '').trim();
+    if (cmd === 'status') {
+      return { type: 'status' };
+    }
+    if (cmd === 'stop') {
+      return { type: 'stop', name: rest.length > 0 ? rest : undefined };
+    }
   }
   return { type: 'text', text: messageText };
 }
@@ -20,9 +28,15 @@ async function handleStopCommand({ runHerdr, name, agents = [] }) {
   if (!name) {
     return { ok: false, message: 'Usage: /stop <name> — see /status for agent names.' };
   }
+  if (name === FIRST_MATE_NAME) {
+    return { ok: false, message: 'Cannot stop first-mate. /stop is for crewmates only.' };
+  }
   const match = (agents || []).find((a) => a.name === name);
   if (!match) {
     return { ok: false, message: `Agent "${name}" not found. Check /status for current names.` };
+  }
+  if (!match.workspace_id) {
+    return { ok: false, message: `Agent "${name}" has no associated workspace ID.` };
   }
   await runHerdr(['worktree', 'remove', '--workspace', match.workspace_id, '--force']);
   return { ok: true, message: `Stopped and removed workspace for "${name}".` };
