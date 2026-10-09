@@ -117,6 +117,22 @@ test('promptFirstMate recovers from stall/timeout when status is blocked', async
   assert.equal(reply, 'approval needed: approve?');
 });
 
+test('promptFirstMate rethrows if agent get after a stall also shows a stuck state', async () => {
+  const fakeRunHerdr = async (args) => {
+    if (args[0] === 'agent' && args[1] === 'prompt') {
+      throw new HerdrError('timeout', 'timed out waiting for agent status');
+    }
+    if (args[0] === 'agent' && args[1] === 'get') {
+      return { agent: { agent_status: 'working' } };
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  await assert.rejects(
+    () => promptFirstMate({ runHerdr: fakeRunHerdr, text: 'hello' }),
+    (err) => err instanceof HerdrError && err.code === 'timeout'
+  );
+});
+
 test('ensureFirstMate cleans up created workspace if agent start fails', async () => {
   const calls = [];
   const fakeRunHerdr = async (args) => {
