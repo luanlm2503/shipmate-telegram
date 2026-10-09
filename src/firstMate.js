@@ -7,8 +7,9 @@ const TERMINAL_STATUSES = new Set(['idle', 'done', 'blocked']);
 
 // Telegram is text-only: the user cannot answer interactive question dialogs
 // or permission prompts. Every forwarded message carries this directive so
-// first-mate never blocks on UI the Telegram side cannot operate.
-const TELEGRAM_DIRECTIVE = '[Via Telegram relay: NEVER use interactive question dialogs, approval prompts, or AskUserQuestion-style UI. Use sensible defaults (previous convention in this repo) and state assumptions in text. Final reply must be plain text summary, no raw JSON.]';
+// first-mate defaults to the shipmate workflow and never blocks on UI the
+// Telegram side cannot operate.
+const TELEGRAM_DIRECTIVE = '[Via Telegram relay: default to the shipmate skill workflow (Herdr worktree + crew agents). NEVER use interactive question dialogs, approval prompts, or AskUserQuestion-style UI. Use sensible defaults (previous repo convention) and state assumptions in text. Start crewmates trust-all: claude with --dangerously-skip-permissions, opencode with --auto, codex with --dangerously-bypass-approvals-and-sandbox; each crew in its own git worktree. Final reply must be plain text summary, no raw JSON.]';
 
 /**
  * Ensure the persistent first-mate pane exists; create it if not.
@@ -131,4 +132,36 @@ async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000, replyMa
   return short;
 }
 
-module.exports = { FIRST_MATE_NAME, ensureFirstMate, promptFirstMate };
+/**
+ * Read-only view of what the first-mate pane is currently displaying.
+ * Returns a status header plus the cleaned visible viewport. Never sends
+ * a prompt and never creates the pane.
+ * @param {{runHerdr: Function}} params
+ * @returns {Promise<string>}
+ */
+async function readFirstMateViewport({ runHerdr }) {
+  let info;
+  try {
+    const result = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
+    info = result.agent;
+  } catch (err) {
+    if (err instanceof HerdrError && err.code === 'agent_not_found') {
+      return 'first-mate is not currently running.';
+    }
+    throw err;
+  }
+  const header = `first-mate: ${info.agent_status} (workspace ${info.workspace_id})`;
+  let raw = '';
+  try {
+    raw = await runHerdr(
+      ['agent', 'read', FIRST_MATE_NAME, '--source', 'visible', '--lines', '60', '--format', 'text'],
+      { raw: true }
+    );
+  } catch {
+    return `${header}\n\n(viewport could not be read)`;
+  }
+  const viewport = cleanTerminalText(raw);
+  return `${header}\n\n${viewport || '(empty viewport)'}`;
+}
+
+module.exports = { FIRST_MATE_NAME, TELEGRAM_DIRECTIVE, ensureFirstMate, promptFirstMate, readFirstMateViewport };

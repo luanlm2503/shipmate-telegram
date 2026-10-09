@@ -200,3 +200,60 @@ test('promptFirstMate prepends the Telegram non-interactive directive to forward
   assert.ok(captured.includes(TELEGRAM_DIRECTIVE), 'directive must be prepended');
   assert.equal(typeof reply, 'string');
 });
+
+test('Telegram directive defaults to the shipmate workflow', async () => {
+  const { TELEGRAM_DIRECTIVE } = require('./firstMate');
+  assert.match(TELEGRAM_DIRECTIVE, /shipmate/, 'directive must name the shipmate skill');
+  assert.match(TELEGRAM_DIRECTIVE, /trust-all|dangerously-skip-permissions|--auto/i, 'directive must cover trust-all crew startup');
+  assert.match(TELEGRAM_DIRECTIVE, /worktree|crew/i, 'directive must cover the worktree crew default');
+});
+
+test('readFirstMateViewport returns status header plus cleaned viewport', async () => {
+  const { readFirstMateViewport } = require('./firstMate');
+  const fakeRunHerdr = async (args, options) => {
+    if (args[0] === 'agent' && args[1] === 'get') {
+      return { agent: { name: 'first-mate', agent_status: 'working', workspace_id: 'wK' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      assert.deepEqual(args.slice(0, 3), ['agent', 'read', 'first-mate']);
+      assert.ok(args.includes('visible'), 'must read the visible viewport source');
+      assert.deepEqual(options, { raw: true });
+      return '┃ doing stuff   █ 12:00';
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await readFirstMateViewport({ runHerdr: fakeRunHerdr });
+  assert.match(reply, /first-mate/);
+  assert.match(reply, /working/);
+  assert.match(reply, /wK/);
+  assert.match(reply, /doing stuff/);
+  assert.doesNotMatch(reply, /┃/);
+});
+
+test('readFirstMateViewport reports clearly when first-mate is not running', async () => {
+  const { readFirstMateViewport } = require('./firstMate');
+  const fakeRunHerdr = async (args) => {
+    if (args[0] === 'agent' && args[1] === 'get') {
+      throw new HerdrError('agent_not_found', 'agent target first-mate not found');
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await readFirstMateViewport({ runHerdr: fakeRunHerdr });
+  assert.match(reply, /not.*running/i);
+});
+
+test('readFirstMateViewport degrades to header-only when viewport read fails', async () => {
+  const { readFirstMateViewport } = require('./firstMate');
+  const fakeRunHerdr = async (args) => {
+    if (args[0] === 'agent' && args[1] === 'get') {
+      return { agent: { name: 'first-mate', agent_status: 'idle', workspace_id: 'wK' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      throw new HerdrError('process_error', 'read failed');
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await readFirstMateViewport({ runHerdr: fakeRunHerdr });
+  assert.match(reply, /idle/);
+  assert.match(reply, /could not be read|couldn't be read|unavailable/i);
+});
