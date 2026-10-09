@@ -1,4 +1,5 @@
-const FIRST_MATE_NAME = 'first-mate';
+const { FIRST_MATE_NAME } = require('./firstMate');
+
 const FINISHED_STATUSES = new Set(['idle', 'done']);
 
 /**
@@ -6,21 +7,27 @@ const FINISHED_STATUSES = new Set(['idle', 'done']);
  * result and return notification events for genuine transitions only.
  * A brand-new agent (no entry in `previous`) never fires on its first
  * observation — there is nothing to transition *from* yet.
- * @param {Record<string,string>} previous
- * @param {Array<{name:string, agent_status:string, workspace_id:string}>} current
+ * @param {Record<string,string>} [previous]
+ * @param {Array<{name:string, agent_status:string, workspace_id:string}>} [current]
  * @returns {Array<{name:string, workspaceId:string, kind:'blocked'|'finished'}>}
  */
-function diffAgentStatuses(previous, current) {
+function diffAgentStatuses(previous = {}, current = []) {
+  if (!previous || typeof previous !== 'object' || !Array.isArray(current)) {
+    return [];
+  }
   const events = [];
   for (const agent of current) {
-    if (agent.name === FIRST_MATE_NAME) continue;
+    if (!agent || agent.name === FIRST_MATE_NAME) continue;
+    if (!Object.hasOwn(previous, agent.name)) continue;
     const previousStatus = previous[agent.name];
-    if (previousStatus === undefined) continue;
     if (previousStatus === agent.agent_status) continue;
 
     if (agent.agent_status === 'blocked') {
       events.push({ name: agent.name, workspaceId: agent.workspace_id, kind: 'blocked' });
-    } else if (previousStatus === 'working' && FINISHED_STATUSES.has(agent.agent_status)) {
+    } else if (
+      (previousStatus === 'working' || previousStatus === 'blocked') &&
+      FINISHED_STATUSES.has(agent.agent_status)
+    ) {
       events.push({ name: agent.name, workspaceId: agent.workspace_id, kind: 'finished' });
     }
   }

@@ -56,3 +56,16 @@ test('returns multiple events when several agents transition at once', () => {
     { name: 'crewB', workspaceId: 'w2', kind: 'finished' },
   ]);
 });
+
+test('detects a transition into finished from blocked', () => {
+  const previous = { crewA: 'blocked' };
+  const current = [{ name: 'crewA', agent_status: 'idle', workspace_id: 'w1' }];
+  const events = diffAgentStatuses(previous, current);
+  assert.deepEqual(events, [{ name: 'crewA', workspaceId: 'w1', kind: 'finished' }]);
+});
+
+test('handles invalid or empty inputs defensively', () => {
+  assert.deepEqual(diffAgentStatuses(null, null), []);
+  assert.deepEqual(diffAgentStatuses({}, null), []);
+  assert.deepEqual(diffAgentStatuses(undefined, undefined), []);
+});
