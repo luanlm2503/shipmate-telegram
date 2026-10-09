@@ -1,0 +1,74 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { parseCommand, formatStatusMessage, handleStopCommand } = require('./commands');
+
+test('parseCommand recognizes /status with no arguments', () => {
+  assert.deepEqual(parseCommand('/status'), { type: 'status' });
+});
+
+test('parseCommand recognizes /stop with a name argument', () => {
+  assert.deepEqual(parseCommand('/stop crewA'), { type: 'stop', name: 'crewA' });
+});
+
+test('parseCommand returns type "stop" with name undefined when no argument given', () => {
+  assert.deepEqual(parseCommand('/stop'), { type: 'stop', name: undefined });
+});
+
+test('parseCommand returns type "text" for anything else, preserving the text', () => {
+  assert.deepEqual(parseCommand('fix the login bug'), { type: 'text', text: 'fix the login bug' });
+});
+
+test('formatStatusMessage lists each agent with name, status, and workspace', () => {
+  const agents = [
+    { name: 'first-mate', agent_status: 'idle', workspace_id: 'w1' },
+    { name: 'crewA', agent_status: 'working', workspace_id: 'w2' },
+  ];
+  const message = formatStatusMessage(agents);
+  assert.match(message, /first-mate/);
+  assert.match(message, /idle/);
+  assert.match(message, /crewA/);
+  assert.match(message, /working/);
+  assert.match(message, /w2/);
+});
+
+test('formatStatusMessage reports a clear message when there are no agents', () => {
+  const message = formatStatusMessage([]);
+  assert.match(message, /no agents/i);
+});
+
+test('handleStopCommand returns an error result when the name does not resolve', async () => {
+  const fakeRunHerdr = async () => {
+    throw new Error('should not be called');
+  };
+  const result = await handleStopCommand({ runHerdr: fakeRunHerdr, name: undefined, agents: [] });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /usage/i);
+});
+
+test('handleStopCommand returns an error result when the named agent is not found', async () => {
+  const fakeRunHerdr = async () => {
+    throw new Error('should not be called');
+  };
+  const result = await handleStopCommand({
+    runHerdr: fakeRunHerdr,
+    name: 'does-not-exist',
+    agents: [{ name: 'crewA', workspace_id: 'w1' }],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /not found/i);
+});
+
+test('handleStopCommand calls herdr worktree remove for a found agent and reports success', async () => {
+  const calls = [];
+  const fakeRunHerdr = async (args) => {
+    calls.push(args);
+    return {};
+  };
+  const result = await handleStopCommand({
+    runHerdr: fakeRunHerdr,
+    name: 'crewA',
+    agents: [{ name: 'crewA', workspace_id: 'w1' }],
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, [['worktree', 'remove', '--workspace', 'w1', '--force']]);
+});
