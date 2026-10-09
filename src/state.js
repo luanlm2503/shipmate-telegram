@@ -8,16 +8,26 @@ function loadState(stateFilePath = DEFAULT_STATE_PATH) {
   if (!fs.existsSync(stateFilePath)) return {};
   try {
     const raw = fs.readFileSync(stateFilePath, 'utf8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
 }
 
-function saveState(stateFilePath = DEFAULT_STATE_PATH, state) {
-  const dir = path.dirname(stateFilePath);
+function saveState(pathOrState, maybeState) {
+  let targetPath = DEFAULT_STATE_PATH;
+  let state = {};
+  if (typeof pathOrState === 'string') {
+    targetPath = pathOrState;
+    state = maybeState || {};
+  } else if (pathOrState && typeof pathOrState === 'object') {
+    state = pathOrState;
+    if (typeof maybeState === 'string') targetPath = maybeState;
+  }
+  const dir = path.dirname(targetPath);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8');
+  fs.writeFileSync(targetPath, JSON.stringify(state, null, 2), 'utf8');
 }
 
 module.exports = { DEFAULT_STATE_PATH, loadState, saveState };

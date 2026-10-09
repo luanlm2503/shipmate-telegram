@@ -31,3 +31,21 @@ test('loadState returns an empty object if the file contains invalid JSON', () =
   assert.deepEqual(state, {});
   fs.unlinkSync(p);
 });
+
+test('loadState returns an empty object if the file contains JSON null or array', () => {
+  const p = tempStatePath();
+  fs.writeFileSync(p, 'null', 'utf8');
+  assert.deepEqual(loadState(p), {});
+  fs.writeFileSync(p, '[1, 2, 3]', 'utf8');
+  assert.deepEqual(loadState(p), {});
+  fs.unlinkSync(p);
+});
+
+test('saveState supports (state, path) or (path, state) flexibly', () => {
+  const p = tempStatePath();
+  saveState({ a: 1 }, p);
+  assert.deepEqual(loadState(p), { a: 1 });
+  saveState(p, { b: 2 });
+  assert.deepEqual(loadState(p), { b: 2 });
+  fs.unlinkSync(p);
+});
