@@ -7,6 +7,24 @@ const BORDER_CHARS_PATTERN = /[┃╹▀]/g;
 const BLOCK_CHAR = '█';
 const DUPLICATE_MARKER_PATTERN = /^\s*\.\.\.\s*\(\d+\s+duplicate lines?\)\s*$/;
 
+// Lines that are terminal/agent chrome rather than the agent's actual reply:
+// echoed shell commands, raw herdr JSON, LSP/MCP connection noise, agent
+// header/footer decorations. summarizeReply drops these so Telegram
+// notifications stay short.
+const NOISE_LINE_PATTERNS = [
+  /^\$/, // echoed shell command ($ herdr agent ...)
+  /^\{"id":"cli/, // raw herdr JSON response
+  /^PS\s+[A-Z]:\\/, // PowerShell prompt line
+  /^LSPs?\b/, // LSP / LSPs are disabled
+  /^MCP\b/, // MCP header
+  /Connected$/, // - 9remote Connected
+  /are disabled$/, // LSPs are disabled
+  /model catalog/, // claude unknown-model warning
+  /^Build\s*·/, // opencode build header
+  /^[⏵✻✢❯]/, // agent footer chrome
+  /^[─━═]{3,}$/, // separator rules
+];
+
 function cleanTerminalText(raw) {
   if (!raw) return '';
   const lines = raw.split('\n');
@@ -38,4 +56,24 @@ function cleanTerminalText(raw) {
   return collapsed.join('\n');
 }
 
-module.exports = { cleanTerminalText };
+function isNoiseLine(line) {
+  return NOISE_LINE_PATTERNS.some((pattern) => pattern.test(line));
+}
+
+/**
+ * Shorten a cleaned terminal reply for Telegram: drop noise lines
+ * (echoed commands, raw JSON, LSP/MCP chrome) and keep only the most
+ * recent `maxLines`. Older lines are replaced with a single marker.
+ */
+function summarizeReply(cleaned, maxLines = 30) {
+  if (!cleaned) return '';
+  const lines = String(cleaned)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !isNoiseLine(line));
+  if (lines.length <= maxLines) return lines.join('\n');
+  const kept = lines.slice(lines.length - maxLines);
+  return `[...${lines.length - maxLines} dòng trước đã lược bỏ]\n${kept.join('\n')}`;
+}
+
+module.exports = { cleanTerminalText, summarizeReply };

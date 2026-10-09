@@ -14,6 +14,7 @@ const config = {
   authorizedChatId: Number(process.env.TELEGRAM_CHAT_ID),
   notifyPollIntervalMs: Number(process.env.NOTIFY_POLL_INTERVAL_MS || 5000),
   firstMateAgentKind: process.env.FIRST_MATE_AGENT_KIND || 'opencode',
+  replyMaxLines: Number(process.env.REPLY_MAX_LINES || 30),
 };
 
 const { init } = startBot(config);

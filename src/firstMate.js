@@ -1,9 +1,14 @@
 const os = require('node:os');
 const { HerdrError } = require('./herdr');
-const { cleanTerminalText } = require('./textClean');
+const { cleanTerminalText, summarizeReply } = require('./textClean');
 
 const FIRST_MATE_NAME = 'first-mate';
 const TERMINAL_STATUSES = new Set(['idle', 'done', 'blocked']);
+
+// Telegram is text-only: the user cannot answer interactive question dialogs
+// or permission prompts. Every forwarded message carries this directive so
+// first-mate never blocks on UI the Telegram side cannot operate.
+const TELEGRAM_DIRECTIVE = '[Via Telegram relay: NEVER use interactive question dialogs, approval prompts, or AskUserQuestion-style UI. Use sensible defaults (previous convention in this repo) and state assumptions in text. Final reply must be plain text summary, no raw JSON.]';
 
 /**
  * Ensure the persistent first-mate pane exists; create it if not.
@@ -59,10 +64,11 @@ async function ensureFirstMate({ runHerdr, state, agentKind = 'opencode' }) {
  * @param {{runHerdr: Function, text: string, waitTimeoutMs?: number}} params
  * @returns {Promise<string>}
  */
-async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000 }) {
+async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000, replyMaxLines = 30 }) {
+  const forwarded = `${TELEGRAM_DIRECTIVE}\n\n${text}`;
   try {
     await runHerdr([
-      'agent', 'prompt', FIRST_MATE_NAME, text,
+      'agent', 'prompt', FIRST_MATE_NAME, forwarded,
       '--wait', '--until', 'idle', '--until', 'done', '--until', 'blocked',
       '--timeout', String(waitTimeoutMs),
     ], { timeoutMs: waitTimeoutMs + 30000 });
@@ -118,10 +124,11 @@ async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000 }) {
   }
 
   const cleaned = cleanTerminalText(raw);
+  const short = summarizeReply(cleaned, replyMaxLines);
   if (status === 'blocked') {
-    return `⚠️ First-mate đang chờ duyệt / xác nhận:\n\n${cleaned}\n\n👉 Nhắn "ok" hoặc "allow" để Đồng ý, hoặc "reject" để Từ chối.`;
+    return `⚠️ First-mate đang chờ duyệt / xác nhận:\n\n${short}\n\n👉 Nhắn "ok" hoặc "allow" để Đồng ý, hoặc "reject" để Từ chối.`;
   }
-  return cleaned;
+  return short;
 }
 
 module.exports = { FIRST_MATE_NAME, ensureFirstMate, promptFirstMate };

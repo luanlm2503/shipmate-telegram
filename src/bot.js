@@ -23,6 +23,7 @@ function startBot(config) {
     authorizedChatId,
     notifyPollIntervalMs,
     firstMateAgentKind,
+    replyMaxLines = 30,
     stateFilePath = DEFAULT_STATE_PATH,
   } = config;
 
@@ -97,7 +98,7 @@ function startBot(config) {
       try {
         // Auto-heal: Ensure first-mate pane exists (re-opens if user closed the space in Herdr)
         await ensureFirstMate({ runHerdr, state, agentKind: firstMateAgentKind });
-        const reply = await promptFirstMate({ runHerdr, text: command.text });
+        const reply = await promptFirstMate({ runHerdr, text: command.text, replyMaxLines });
         await sendToUser(reply);
       } finally {
         isPrompting = false;

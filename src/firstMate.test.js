@@ -63,6 +63,25 @@ test('promptFirstMate returns the cleaned reply on a normal --wait success', asy
   assert.equal(typeof reply, 'string');
 });
 
+test('promptFirstMate summarizes long replies down to the trailing lines', async () => {
+  const long = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join('\n');
+  const fakeRunHerdr = async (args) => {
+    if (args[0] === 'agent' && args[1] === 'prompt') {
+      return { agent: { agent_status: 'idle' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'get') {
+      return { agent: { agent_status: 'idle' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      return long;
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await promptFirstMate({ runHerdr: fakeRunHerdr, text: 'hello', replyMaxLines: 5 });
+  assert.ok(reply.split('\n').length <= 6, `expected <= 6 lines, got ${reply.split('\n').length}`);
+  assert.ok(reply.includes('line 50'), 'must keep the most recent lines');
+});
+
 test('promptFirstMate recovers from agent_prompt_stalled by checking agent get', async () => {
   let promptCalled = false;
   const fakeRunHerdr = async (args) => {
@@ -157,4 +176,27 @@ test('ensureFirstMate cleans up created workspace if agent start fails', async (
     /agent binary crashed/
   );
   assert.ok(calls.some((c) => c[0] === 'workspace' && c[1] === 'close' && c[2] === 'wTemp'));
+});
+
+test('promptFirstMate prepends the Telegram non-interactive directive to forwarded text', async () => {
+  const { TELEGRAM_DIRECTIVE } = require('./firstMate');
+  let captured = null;
+  const fakeRunHerdr = async (args) => {
+    if (args[0] === 'agent' && args[1] === 'prompt') {
+      captured = args[3];
+      return { agent: { agent_status: 'idle' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'get') {
+      return { agent: { agent_status: 'idle' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      return 'ready';
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await promptFirstMate({ runHerdr: fakeRunHerdr, text: 'open a crew' });
+  assert.ok(typeof TELEGRAM_DIRECTIVE === 'string' && TELEGRAM_DIRECTIVE.length > 0, 'directive constant must exist');
+  assert.ok(captured.includes('open a crew'), 'user text must be preserved');
+  assert.ok(captured.includes(TELEGRAM_DIRECTIVE), 'directive must be prepended');
+  assert.equal(typeof reply, 'string');
 });
