@@ -75,6 +75,8 @@ function startBot(config) {
       }
       isPrompting = true;
       try {
+        // Auto-heal: Ensure first-mate pane exists (re-opens if user closed the space in Herdr)
+        await ensureFirstMate({ runHerdr, state, agentKind: firstMateAgentKind });
         const reply = await promptFirstMate({ runHerdr, text: command.text });
         await sendToUser(reply);
       } finally {
