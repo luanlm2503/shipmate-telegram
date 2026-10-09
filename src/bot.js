@@ -68,6 +68,26 @@ function startBot(config) {
         await sendToUser(result.message);
         return;
       }
+      // If agent is currently blocked and user sends a quick approval or rejection:
+      const lower = command.text.trim().toLowerCase();
+      try {
+        const checkStatus = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
+        if (checkStatus?.agent?.agent_status === 'blocked') {
+          if (['ok', 'allow', 'yes', 'y', 'dong y', 'đồng ý', 'enter'].includes(lower)) {
+            await runHerdr(['agent', 'send-keys', FIRST_MATE_NAME, 'enter']);
+            await sendToUser('✅ Đã gửi Đồng ý (Enter) cho first-mate.');
+            return;
+          }
+          if (['reject', 'no', 'deny', 'từ chối', 'tu choi', 'esc'].includes(lower)) {
+            await runHerdr(['agent', 'send-keys', FIRST_MATE_NAME, 'esc']);
+            await sendToUser('❌ Đã gửi Từ chối (Esc) cho first-mate.');
+            return;
+          }
+        }
+      } catch {
+        // ignore check failure
+      }
+
       // command.type === 'text': forward to first-mate with concurrency protection
       if (isPrompting) {
         await sendToUser('⚠️ First-mate is currently busy with an in-flight prompt. Please wait for it to finish.');

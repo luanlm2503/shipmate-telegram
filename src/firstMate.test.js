@@ -114,7 +114,8 @@ test('promptFirstMate recovers from stall/timeout when status is blocked', async
     throw new Error(`unexpected call: ${args.join(' ')}`);
   };
   const reply = await promptFirstMate({ runHerdr: fakeRunHerdr, text: 'delete file' });
-  assert.equal(reply, 'approval needed: approve?');
+  assert.match(reply, /approval needed: approve\?/);
+  assert.match(reply, /chờ duyệt/);
 });
 
 test('promptFirstMate rethrows if agent get after a stall also shows a stuck state', async () => {

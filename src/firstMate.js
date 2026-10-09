@@ -79,11 +79,49 @@ async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000 }) {
     // else: fall through and read the reply as normal
   }
 
-  const raw = await runHerdr(
-    ['agent', 'read', FIRST_MATE_NAME, '--source', 'recent', '--lines', '100', '--format', 'text'],
-    { raw: true }
-  );
-  return cleanTerminalText(raw);
+  let status;
+  try {
+    const statusResult = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
+    status = statusResult?.agent?.agent_status;
+  } catch {
+    // ignore
+  }
+
+  let raw = '';
+  // When agent is blocked (in alternate screen dialog), recent history cannot be scrolled; use visible
+  if (status === 'blocked') {
+    try {
+      raw = await runHerdr(
+        ['agent', 'read', FIRST_MATE_NAME, '--source', 'visible', '--lines', '60', '--format', 'text'],
+        { raw: true }
+      );
+    } catch {
+      // fallback
+    }
+  } else {
+    try {
+      raw = await runHerdr(
+        ['agent', 'read', FIRST_MATE_NAME, '--source', 'recent', '--lines', '100', '--format', 'text'],
+        { raw: true }
+      );
+    } catch {
+      // If reading recent fails (e.g. alternate-screen transition), fall back to --source visible
+      try {
+        raw = await runHerdr(
+          ['agent', 'read', FIRST_MATE_NAME, '--source', 'visible', '--lines', '60', '--format', 'text'],
+          { raw: true }
+        );
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const cleaned = cleanTerminalText(raw);
+  if (status === 'blocked') {
+    return `⚠️ First-mate đang chờ duyệt / xác nhận:\n\n${cleaned}\n\n👉 Nhắn "ok" hoặc "allow" để Đồng ý, hoặc "reject" để Từ chối.`;
+  }
+  return cleaned;
 }
 
 module.exports = { FIRST_MATE_NAME, ensureFirstMate, promptFirstMate };
