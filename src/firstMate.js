@@ -127,7 +127,7 @@ async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000, replyMa
   const cleaned = cleanTerminalText(raw);
   const short = summarizeReply(cleaned, replyMaxLines);
   if (status === 'blocked') {
-    return `⚠️ First-mate đang chờ duyệt / xác nhận:\n\n${short}\n\n👉 Nhắn "ok" hoặc "allow" để Đồng ý, hoặc "reject" để Từ chối.`;
+    return `⚠️ First-mate đang chờ duyệt / xác nhận:\n\n${short}\n\n👉 Nếu là menu chọn: nhắn số option (1, 2, 3...). Nếu là xác nhận: nhắn "ok" để Đồng ý, "reject" để Từ chối.`;
   }
   return short;
 }

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseCommand, formatStatusMessage, handleStopCommand } = require('./commands');
+const { parseCommand, formatStatusMessage, handleStopCommand, resolveBlockedKeys } = require('./commands');
 
 test('parseCommand recognizes /status with no arguments', () => {
   assert.deepEqual(parseCommand('/status'), { type: 'status' });
@@ -98,6 +98,35 @@ test('parseCommand handles case-insensitivity and bot handle mentions', () => {
   assert.deepEqual(parseCommand('/Status'), { type: 'status' });
   assert.deepEqual(parseCommand('/status@my_bot'), { type: 'status' });
   assert.deepEqual(parseCommand('/STOP@my_bot crewA'), { type: 'stop', name: 'crewA' });
+});
+
+test('resolveBlockedKeys maps ok/allow variants to enter', () => {
+  for (const word of ['ok', 'allow', 'yes', 'y', 'dong y', 'đồng ý', 'enter', 'ok please']) {
+    assert.deepEqual(resolveBlockedKeys(word), { keys: ['enter'], label: 'Đồng ý (Enter)' });
+  }
+});
+
+test('resolveBlockedKeys maps reject variants to esc', () => {
+  for (const word of ['reject', 'no', 'deny', 'từ chối', 'tu choi', 'esc']) {
+    assert.deepEqual(resolveBlockedKeys(word), { keys: ['esc'], label: 'Từ chối (Esc)' });
+  }
+});
+
+test('resolveBlockedKeys maps a bare option number to arrow-down navigation plus enter', () => {
+  assert.deepEqual(resolveBlockedKeys('1'), { keys: ['enter'], label: 'option 1 (Enter)' });
+  assert.deepEqual(resolveBlockedKeys('2'), { keys: ['down', 'enter'], label: 'option 2 (↓ + Enter)' });
+  assert.deepEqual(resolveBlockedKeys('3'), { keys: ['down', 'down', 'enter'], label: 'option 3 (↓↓ + Enter)' });
+});
+
+test('resolveBlockedKeys prefers an embedded option number over surrounding words', () => {
+  assert.deepEqual(resolveBlockedKeys('ok 1'), { keys: ['enter'], label: 'option 1 (Enter)' });
+  assert.deepEqual(resolveBlockedKeys('chọn 2'), { keys: ['down', 'enter'], label: 'option 2 (↓ + Enter)' });
+});
+
+test('resolveBlockedKeys returns null for anything else', () => {
+  assert.equal(resolveBlockedKeys('hello'), null);
+  assert.equal(resolveBlockedKeys(''), null);
+  assert.equal(resolveBlockedKeys('oklahoma'), null);
 });
 
 test('parseCommand recognizes /firstmate with no arguments', () => {

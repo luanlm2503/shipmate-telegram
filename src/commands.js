@@ -35,6 +35,47 @@ function formatStatusMessage(agents) {
   return lines.join('\n');
 }
 
+const APPROVE_WORDS = new Set(['ok', 'allow', 'yes', 'y', 'dong y', 'đồng ý', 'enter']);
+const REJECT_WORDS = new Set(['reject', 'no', 'deny', 'từ chối', 'tu choi', 'esc']);
+
+/**
+ * Map a Telegram reply received while first-mate is blocked to the
+ * send-keys sequence that operates the agent's dialog. A bare option
+ * number N selects the Nth item of a select menu (highlight starts on
+ * option 1, so N-1 downs then enter); approve/reject words map to
+ * enter/esc for plain confirmation dialogs. Returns null when the text
+ * is not a dialog answer.
+ * @param {string} messageText
+ * @returns {{keys: string[], label: string} | null}
+ */
+function resolveBlockedKeys(messageText) {
+  const lower = (messageText || '').trim().toLowerCase();
+  if (lower === '') return null;
+  // A standalone option number anywhere in the reply wins: it selects the
+  // Nth item of a select menu (highlight starts on option 1).
+  const tokens = lower.split(/\s+/);
+  const numToken = tokens.find((t) => /^[1-9][0-9]?$/.test(t));
+  if (numToken) {
+    const n = Number(numToken);
+    const downs = Array(Math.max(0, n - 1)).fill('down');
+    const arrows = n === 1 ? '' : '↓'.repeat(n - 1);
+    const label = n === 1 ? 'option 1 (Enter)' : `option ${n} (${arrows} + Enter)`;
+    return { keys: [...downs, 'enter'], label };
+  }
+  // Approve/reject words: exact match or leading word + space (so "ok please"
+  // approves but "oklahoma" does not). Multi-word entries checked longest first.
+  const startsWithWord = (word) => lower === word || lower.startsWith(`${word} `);
+  const approve = [...APPROVE_WORDS].sort((a, b) => b.length - a.length);
+  if (approve.some(startsWithWord)) {
+    return { keys: ['enter'], label: 'Đồng ý (Enter)' };
+  }
+  const reject = [...REJECT_WORDS].sort((a, b) => b.length - a.length);
+  if (reject.some(startsWithWord)) {
+    return { keys: ['esc'], label: 'Từ chối (Esc)' };
+  }
+  return null;
+}
+
 async function handleStopCommand({ runHerdr, name, agents = [] }) {
   if (!name) {
     return { ok: false, message: 'Usage: /stop <name> — see /status for agent names.' };
@@ -53,4 +94,4 @@ async function handleStopCommand({ runHerdr, name, agents = [] }) {
   return { ok: true, message: `Stopped and removed workspace for "${name}".` };
 }
 
-module.exports = { parseCommand, formatStatusMessage, handleStopCommand, getAgentDisplayName };
+module.exports = { parseCommand, formatStatusMessage, handleStopCommand, getAgentDisplayName, resolveBlockedKeys };

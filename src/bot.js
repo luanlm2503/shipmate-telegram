@@ -6,7 +6,7 @@ const { runHerdr } = require('./herdr');
 const { loadState, saveState, DEFAULT_STATE_PATH } = require('./state');
 const { ensureFirstMate, promptFirstMate, readFirstMateViewport, FIRST_MATE_NAME } = require('./firstMate');
 const { diffAgentStatuses } = require('./notifier');
-const { parseCommand, formatStatusMessage, handleStopCommand } = require('./commands');
+const { parseCommand, formatStatusMessage, handleStopCommand, resolveBlockedKeys } = require('./commands');
 
 const logDir = path.join(__dirname, '..', 'logs');
 fs.mkdirSync(logDir, { recursive: true });
@@ -74,21 +74,20 @@ function startBot(config) {
         await sendToUser(reply);
         return;
       }
-      // If agent is currently blocked and user sends a quick approval or rejection:
+      // If agent is currently blocked, map the reply to dialog keys:
+      // approve/reject words -> enter/esc, bare option number -> menu navigation.
       const lower = command.text.trim().toLowerCase();
       try {
         const checkStatus = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
         if (checkStatus?.agent?.agent_status === 'blocked') {
-          if (['ok', 'allow', 'yes', 'y', 'dong y', 'đồng ý', 'enter'].includes(lower)) {
-            await runHerdr(['agent', 'send-keys', FIRST_MATE_NAME, 'enter']);
-            await sendToUser('✅ Đã gửi Đồng ý (Enter) cho first-mate.');
+          const resolved = resolveBlockedKeys(lower);
+          if (resolved) {
+            await runHerdr(['agent', 'send-keys', FIRST_MATE_NAME, ...resolved.keys]);
+            await sendToUser(`✅ Đã gửi ${resolved.label} cho first-mate.`);
             return;
           }
-          if (['reject', 'no', 'deny', 'từ chối', 'tu choi', 'esc'].includes(lower)) {
-            await runHerdr(['agent', 'send-keys', FIRST_MATE_NAME, 'esc']);
-            await sendToUser('❌ Đã gửi Từ chối (Esc) cho first-mate.');
-            return;
-          }
+          await sendToUser('⚠️ First-mate đang chờ chọn: nhắn số option (1, 2, 3...), hoặc "ok" để Đồng ý, "reject" để Từ chối.');
+          return;
         }
       } catch {
         // ignore check failure
