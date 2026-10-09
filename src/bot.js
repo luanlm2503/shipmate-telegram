@@ -8,11 +8,12 @@ const { ensureFirstMate, promptFirstMate, FIRST_MATE_NAME } = require('./firstMa
 const { diffAgentStatuses } = require('./notifier');
 const { parseCommand, formatStatusMessage, handleStopCommand } = require('./commands');
 
+const logDir = path.join(__dirname, '..', 'logs');
+fs.mkdirSync(logDir, { recursive: true });
+
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   process.stdout.write(line);
-  const logDir = path.join(__dirname, '..', 'logs');
-  fs.mkdirSync(logDir, { recursive: true });
   fs.appendFileSync(path.join(logDir, 'bot.log'), line);
 }
 
@@ -25,20 +26,33 @@ function startBot(config) {
     stateFilePath = DEFAULT_STATE_PATH,
   } = config;
 
-  const bot = new TelegramBot(telegramBotToken, { polling: true });
+  const bot = new TelegramBot(telegramBotToken, { polling: false });
+  bot.on('polling_error', (err) => log(`Telegram polling error: ${err && err.message ? err.message : err}`));
+  bot.on('error', (err) => log(`Telegram bot error: ${err && err.message ? err.message : err}`));
+
   const state = { load: () => loadState(stateFilePath), save: (s) => saveState(stateFilePath, s) };
 
   let lastKnownStatuses = {};
+  let isPrompting = false;
+  let isPolling = false;
 
   async function sendToUser(text) {
-    const MAX_LEN = 4000;
-    const truncated = text.length > MAX_LEN ? text.slice(0, MAX_LEN) + '\n\n[...truncated]' : text;
-    await bot.sendMessage(authorizedChatId, truncated || '(no output)');
+    try {
+      const MAX_LEN = 4000;
+      const truncated = text.length > MAX_LEN ? text.slice(0, MAX_LEN) + '\n\n[...truncated]' : text;
+      await bot.sendMessage(authorizedChatId, truncated || '(no output)');
+    } catch (err) {
+      log(`failed to send Telegram message: ${err && err.message ? err.message : err}`);
+    }
   }
 
   bot.on('message', async (msg) => {
     if (msg.chat.id !== authorizedChatId) return; // silently drop unauthorized senders
-    const text = msg.text || '';
+    if (!msg.text) {
+      await sendToUser('Only text commands and prompts are currently supported.');
+      return;
+    }
+    const text = msg.text.trim();
     const command = parseCommand(text);
     try {
       if (command.type === 'status') {
@@ -52,9 +66,18 @@ function startBot(config) {
         await sendToUser(result.message);
         return;
       }
-      // command.type === 'text': forward to first-mate
-      const reply = await promptFirstMate({ runHerdr, text: command.text });
-      await sendToUser(reply);
+      // command.type === 'text': forward to first-mate with concurrency protection
+      if (isPrompting) {
+        await sendToUser('⚠️ First-mate is currently busy with an in-flight prompt. Please wait for it to finish.');
+        return;
+      }
+      isPrompting = true;
+      try {
+        const reply = await promptFirstMate({ runHerdr, text: command.text });
+        await sendToUser(reply);
+      } finally {
+        isPrompting = false;
+      }
     } catch (err) {
       log(`error handling message: ${err && err.stack ? err.stack : err}`);
       await sendToUser(`Error: ${err && err.message ? err.message : String(err)}`);
@@ -62,6 +85,8 @@ function startBot(config) {
   });
 
   async function pollForNotifications() {
+    if (isPolling) return;
+    isPolling = true;
     try {
       const { agents } = await runHerdr(['agent', 'list']);
       const events = diffAgentStatuses(lastKnownStatuses, agents);
@@ -73,6 +98,8 @@ function startBot(config) {
       for (const agent of (agents || [])) lastKnownStatuses[agent.name] = agent.agent_status;
     } catch (err) {
       log(`error polling for notifications: ${err && err.stack ? err.stack : err}`);
+    } finally {
+      isPolling = false;
     }
   }
 
@@ -80,6 +107,8 @@ function startBot(config) {
     log('starting shipmate-telegram bot');
     await ensureFirstMate({ runHerdr, state, agentKind: firstMateAgentKind });
     log(`first-mate pane ready (kind=${firstMateAgentKind})`);
+    bot.startPolling();
+    log('Telegram long-polling started');
     setInterval(pollForNotifications, notifyPollIntervalMs);
   }
 
