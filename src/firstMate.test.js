@@ -100,18 +100,44 @@ test('promptFirstMate recovers from timeout the same way as agent_prompt_stalled
   assert.equal(typeof reply, 'string');
 });
 
-test('promptFirstMate rethrows if agent get after a stall also shows a stuck state', async () => {
+test('promptFirstMate recovers from stall/timeout when status is blocked', async () => {
   const fakeRunHerdr = async (args) => {
     if (args[0] === 'agent' && args[1] === 'prompt') {
       throw new HerdrError('timeout', 'timed out waiting for agent status');
     }
     if (args[0] === 'agent' && args[1] === 'get') {
-      return { agent: { agent_status: 'working' } };
+      return { agent: { agent_status: 'blocked' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      return 'approval needed: approve?';
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const reply = await promptFirstMate({ runHerdr: fakeRunHerdr, text: 'delete file' });
+  assert.equal(reply, 'approval needed: approve?');
+});
+
+test('ensureFirstMate cleans up created workspace if agent start fails', async () => {
+  const calls = [];
+  const fakeRunHerdr = async (args) => {
+    calls.push(args);
+    if (args[0] === 'agent' && args[1] === 'get') {
+      throw new HerdrError('agent_not_found', 'agent target first-mate not found');
+    }
+    if (args[0] === 'workspace' && args[1] === 'create') {
+      return { workspace: { workspace_id: 'wTemp' }, root_pane: { pane_id: 'wTemp:p1' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'start') {
+      throw new Error('agent binary crashed');
+    }
+    if (args[0] === 'workspace' && args[1] === 'close') {
+      return { ok: true };
     }
     throw new Error(`unexpected call: ${args.join(' ')}`);
   };
   await assert.rejects(
-    () => promptFirstMate({ runHerdr: fakeRunHerdr, text: 'hello' }),
-    (err) => err instanceof HerdrError && err.code === 'timeout'
+    () => ensureFirstMate({ runHerdr: fakeRunHerdr, state: fakeState(), agentKind: 'opencode' }),
+    /agent binary crashed/
   );
+  assert.ok(calls.some((c) => c[0] === 'workspace' && c[1] === 'close' && c[2] === 'wTemp'));
 });

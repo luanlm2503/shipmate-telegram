@@ -36,20 +36,29 @@ function parseHerdrOutput(stdout) {
  * @returns {Promise<any>} parsed.result
  */
 async function runHerdr(args, options = {}) {
-  const { timeoutMs } = options;
+  const { timeoutMs, raw = false } = options;
   try {
     const { stdout } = await execFileAsync('herdr', args, {
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
     });
+    if (raw) return stdout;
     return parseHerdrOutput(stdout).result;
   } catch (err) {
-    // execFile rejects on non-zero exit; herdr still writes its error JSON
-    // to stdout in that case, so recover and parse it the same way.
-    if (err && typeof err.stdout === 'string' && err.stdout.trim().length > 0) {
-      return parseHerdrOutput(err.stdout).result;
-    }
     if (err instanceof HerdrError) throw err;
+    // execFile rejects on non-zero exit; herdr writes its error JSON to
+    // stderr (or stdout in some modes), so recover and parse it if present.
+    const errOutput =
+      (err && typeof err.stderr === 'string' && err.stderr.trim().length > 0 && err.stderr) ||
+      (err && typeof err.stdout === 'string' && err.stdout.trim().length > 0 && err.stdout);
+
+    if (errOutput) {
+      try {
+        return parseHerdrOutput(errOutput).result;
+      } catch (parseErr) {
+        if (parseErr instanceof HerdrError) throw parseErr;
+      }
+    }
     throw new HerdrError('process_error', err && err.message ? err.message : String(err));
   }
 }
