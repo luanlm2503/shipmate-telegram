@@ -4,7 +4,7 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const { runHerdr } = require('./herdr');
 const { loadState, saveState, DEFAULT_STATE_PATH } = require('./state');
-const { ensureFirstMate, promptFirstMate, FIRST_MATE_NAME } = require('./firstMate');
+const { ensureFirstMate, promptFirstMate, readFirstMateViewport, FIRST_MATE_NAME } = require('./firstMate');
 const { diffAgentStatuses } = require('./notifier');
 const { parseCommand, formatStatusMessage, handleStopCommand } = require('./commands');
 
@@ -67,6 +67,11 @@ function startBot(config) {
         const { agents } = await runHerdr(['agent', 'list']);
         const result = await handleStopCommand({ runHerdr, name: command.name, agents });
         await sendToUser(result.message);
+        return;
+      }
+      if (command.type === 'firstmate') {
+        const reply = await readFirstMateViewport({ runHerdr });
+        await sendToUser(reply);
         return;
       }
       // If agent is currently blocked and user sends a quick approval or rejection:
