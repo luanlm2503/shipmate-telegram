@@ -59,13 +59,13 @@ async function ensureFirstMate({ runHerdr, state, agentKind = 'opencode' }) {
  * @param {{runHerdr: Function, text: string, waitTimeoutMs?: number}} params
  * @returns {Promise<string>}
  */
-async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 180000 }) {
+async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000 }) {
   try {
     await runHerdr([
       'agent', 'prompt', FIRST_MATE_NAME, text,
       '--wait', '--until', 'idle', '--until', 'done', '--until', 'blocked',
       '--timeout', String(waitTimeoutMs),
-    ], { timeoutMs: waitTimeoutMs + 15000 });
+    ], { timeoutMs: waitTimeoutMs + 30000 });
   } catch (err) {
     const isKnownRace = err instanceof HerdrError &&
       (err.code === 'agent_prompt_stalled' || err.code === 'timeout');
