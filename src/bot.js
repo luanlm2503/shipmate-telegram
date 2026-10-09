@@ -40,6 +40,7 @@ function startBot(config) {
     try {
       const MAX_LEN = 4000;
       const truncated = text.length > MAX_LEN ? text.slice(0, MAX_LEN) + '\n\n[...truncated]' : text;
+      log(`Sending reply: "${(truncated || '').slice(0, 80).replace(/\n/g, ' ')}..."`);
       await bot.sendMessage(authorizedChatId, truncated || '(no output)');
     } catch (err) {
       log(`failed to send Telegram message: ${err && err.message ? err.message : err}`);
@@ -53,6 +54,7 @@ function startBot(config) {
       return;
     }
     const text = msg.text.trim();
+    log(`Incoming message: "${text.slice(0, 100)}"`);
     const command = parseCommand(text);
     try {
       if (command.type === 'status') {
