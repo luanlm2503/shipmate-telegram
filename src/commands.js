@@ -12,6 +12,9 @@ function parseCommand(messageText) {
     if (cmd === 'stop') {
       return { type: 'stop', name: rest.length > 0 ? rest : undefined };
     }
+    if (cmd === 'firstmate') {
+      return { type: 'firstmate' };
+    }
   }
   return { type: 'text', text: messageText };
 }

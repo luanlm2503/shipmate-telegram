@@ -99,3 +99,12 @@ test('parseCommand handles case-insensitivity and bot handle mentions', () => {
   assert.deepEqual(parseCommand('/status@my_bot'), { type: 'status' });
   assert.deepEqual(parseCommand('/STOP@my_bot crewA'), { type: 'stop', name: 'crewA' });
 });
+
+test('parseCommand recognizes /firstmate with no arguments', () => {
+  assert.deepEqual(parseCommand('/firstmate'), { type: 'firstmate' });
+});
+
+test('parseCommand handles /firstmate case-insensitivity and bot handle mentions', () => {
+  assert.deepEqual(parseCommand('/FirstMate'), { type: 'firstmate' });
+  assert.deepEqual(parseCommand('/firstmate@my_bot'), { type: 'firstmate' });
+});
