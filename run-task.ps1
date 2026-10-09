@@ -13,13 +13,20 @@ if (-not ($env:PATH -split ";" | Where-Object { $_ -eq $NodeDir })) {
 }
 
 # Ensure Herdr binary path is also preserved
-$HerdrDir = Split-Path -Parent (Get-Command herdr -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
-if ($HerdrDir -and (-not ($env:PATH -split ";" | Where-Object { $_ -eq $HerdrDir }))) {
+$HerdrDir = "C:\Users\luanlm\.herdr\packages\standalone\releases\0.9.3-x86_64-pc-windows-msvc"
+if (-not ($env:PATH -split ";" | Where-Object { $_ -eq $HerdrDir })) {
     $env:PATH = "$HerdrDir;$env:PATH"
+}
+
+# Ensure jq binary path is also preserved
+$JqDir = "C:\Users\luanlm\AppData\Local\Microsoft\WinGet\Packages\jqlang.jq_Microsoft.Winget.Source_8wekyb3d8bbwe"
+if ((Test-Path $JqDir) -and (-not ($env:PATH -split ";" | Where-Object { $_ -eq $JqDir }))) {
+    $env:PATH = "$JqDir;$env:PATH"
 }
 
 Set-Location $ProjectDir
 $stdoutLog = Join-Path $LogsDir "stdout.log"
 $stderrLog = Join-Path $LogsDir "stderr.log"
 
-node index.js *>> $stdoutLog 2>> $stderrLog
+$process = Start-Process -FilePath "node.exe" -ArgumentList "index.js" -WorkingDirectory $ProjectDir -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden -PassThru
+$process.WaitForExit()
