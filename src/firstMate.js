@@ -11,6 +11,35 @@ const TERMINAL_STATUSES = new Set(['idle', 'done', 'blocked']);
 // Telegram side cannot operate.
 const TELEGRAM_DIRECTIVE = '[Via Telegram relay: default to the shipmate skill workflow (Herdr worktree + crew agents). NEVER use interactive question dialogs, approval prompts, or AskUserQuestion-style UI. Use sensible defaults (previous repo convention) and state assumptions in text. Start crewmates trust-all: claude with --dangerously-skip-permissions, opencode with --auto, codex with --dangerously-bypass-approvals-and-sandbox; each crew in its own git worktree. Final reply must be plain text summary, no raw JSON.]';
 
+function savedPaneId(state) {
+  try {
+    return state && typeof state.load === 'function' ? state.load().firstMatePaneId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Resolve how to address first-mate: by name when Herdr still has it,
+ * otherwise by the saved pane id when that pane still hosts an agent
+ * (Herdr clears a live agent's name when the process inside restarts).
+ * @returns {Promise<{target: string, agent: object}>}
+ */
+async function resolveFirstMate({ runHerdr, state }) {
+  try {
+    const result = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
+    return { target: FIRST_MATE_NAME, agent: result.agent };
+  } catch (err) {
+    if (!(err instanceof HerdrError) || err.code !== 'agent_not_found') throw err;
+  }
+  const paneId = savedPaneId(state);
+  if (!paneId) {
+    throw new HerdrError('agent_not_found', 'agent target first-mate not found');
+  }
+  const result = await runHerdr(['agent', 'get', paneId]);
+  return { target: paneId, agent: result.agent };
+}
+
 /**
  * Ensure the persistent first-mate pane exists; create it if not.
  * @param {{runHerdr: Function, state?: {load?: Function, save?: Function}, agentKind?: string}} deps
@@ -18,8 +47,11 @@ const TELEGRAM_DIRECTIVE = '[Via Telegram relay: default to the shipmate skill w
  */
 async function ensureFirstMate({ runHerdr, state, agentKind = 'opencode' }) {
   try {
-    const result = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
-    return result.agent;
+    const resolved = await resolveFirstMate({ runHerdr, state });
+    if (resolved.target === FIRST_MATE_NAME) return resolved.agent;
+    // Name was cleared (process restarted inside the pane): re-attach it.
+    const renamed = await runHerdr(['agent', 'rename', resolved.target, FIRST_MATE_NAME]);
+    return renamed.agent;
   } catch (err) {
     if (!(err instanceof HerdrError) || err.code !== 'agent_not_found') throw err;
   }
@@ -135,15 +167,18 @@ async function promptFirstMate({ runHerdr, text, waitTimeoutMs = 600000, replyMa
 /**
  * Read-only view of what the first-mate pane is currently displaying.
  * Returns a status header plus the cleaned visible viewport. Never sends
- * a prompt and never creates the pane.
- * @param {{runHerdr: Function}} params
+ * a prompt and never creates the pane. Falls back to the saved pane id
+ * when Herdr has cleared the live agent's name.
+ * @param {{runHerdr: Function, state?: {load?: Function}}} params
  * @returns {Promise<string>}
  */
-async function readFirstMateViewport({ runHerdr }) {
+async function readFirstMateViewport({ runHerdr, state }) {
+  let target = FIRST_MATE_NAME;
   let info;
   try {
-    const result = await runHerdr(['agent', 'get', FIRST_MATE_NAME]);
-    info = result.agent;
+    const resolved = await resolveFirstMate({ runHerdr, state });
+    target = resolved.target;
+    info = resolved.agent;
   } catch (err) {
     if (err instanceof HerdrError && err.code === 'agent_not_found') {
       return 'first-mate is not currently running.';
@@ -154,7 +189,7 @@ async function readFirstMateViewport({ runHerdr }) {
   let raw = '';
   try {
     raw = await runHerdr(
-      ['agent', 'read', FIRST_MATE_NAME, '--source', 'visible', '--lines', '60', '--format', 'text'],
+      ['agent', 'read', target, '--source', 'visible', '--lines', '60', '--format', 'text'],
       { raw: true }
     );
   } catch {

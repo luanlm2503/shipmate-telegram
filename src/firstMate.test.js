@@ -257,3 +257,48 @@ test('readFirstMateViewport degrades to header-only when viewport read fails', a
   assert.match(reply, /idle/);
   assert.match(reply, /could not be read|couldn't be read|unavailable/i);
 });
+
+test('ensureFirstMate re-attaches the name when the saved pane hosts an unnamed agent', async () => {
+  const { ensureFirstMate } = require('./firstMate');
+  const calls = [];
+  const fakeRunHerdr = async (args) => {
+    calls.push(args);
+    if (args[0] === 'agent' && args[1] === 'get' && args[2] === FIRST_MATE_NAME) {
+      throw new HerdrError('agent_not_found', 'agent target first-mate not found');
+    }
+    if (args[0] === 'agent' && args[1] === 'get' && args[2] === 'wK:p1') {
+      return { agent: { agent: 'opencode', agent_status: 'working', pane_id: 'wK:p1', workspace_id: 'wK' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'rename') {
+      assert.deepEqual(args, ['agent', 'rename', 'wK:p1', FIRST_MATE_NAME]);
+      return { agent: { name: FIRST_MATE_NAME, agent_status: 'working', pane_id: 'wK:p1', workspace_id: 'wK' } };
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const state = { load: () => ({ firstMatePaneId: 'wK:p1', firstMateWorkspaceId: 'wK' }), save: () => {} };
+  const info = await ensureFirstMate({ runHerdr: fakeRunHerdr, state, agentKind: 'opencode' });
+  assert.equal(info.name, FIRST_MATE_NAME);
+  assert.ok(calls.some((c) => c[0] === 'agent' && c[1] === 'rename'), 'must rename the pane occupant back to first-mate');
+});
+
+test('readFirstMateViewport falls back to the saved pane when the name is missing', async () => {
+  const { readFirstMateViewport } = require('./firstMate');
+  const fakeRunHerdr = async (args, options) => {
+    if (args[0] === 'agent' && args[1] === 'get' && args[2] === FIRST_MATE_NAME) {
+      throw new HerdrError('agent_not_found', 'agent target first-mate not found');
+    }
+    if (args[0] === 'agent' && args[1] === 'get' && args[2] === 'wK:p1') {
+      return { agent: { agent: 'opencode', agent_status: 'working', pane_id: 'wK:p1', workspace_id: 'wK' } };
+    }
+    if (args[0] === 'agent' && args[1] === 'read') {
+      assert.equal(args[2], 'wK:p1', 'must read via the saved pane id');
+      assert.deepEqual(options, { raw: true });
+      return '┃ doing stuff   █ 12:00';
+    }
+    throw new Error(`unexpected call: ${args.join(' ')}`);
+  };
+  const state = { load: () => ({ firstMatePaneId: 'wK:p1' }), save: () => {} };
+  const reply = await readFirstMateViewport({ runHerdr: fakeRunHerdr, state });
+  assert.match(reply, /working/);
+  assert.match(reply, /doing stuff/);
+});

@@ -70,7 +70,7 @@ function startBot(config) {
         return;
       }
       if (command.type === 'firstmate') {
-        const reply = await readFirstMateViewport({ runHerdr });
+        const reply = await readFirstMateViewport({ runHerdr, state });
         await sendToUser(reply);
         return;
       }
